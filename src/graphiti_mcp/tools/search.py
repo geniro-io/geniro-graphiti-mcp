@@ -13,6 +13,7 @@ import logging
 from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 
 from ..engine import GraphitiEngine
+from ..errors import safe_error
 from ..models import (
     ErrorResponse,
     FactSearchResponse,
@@ -46,7 +47,7 @@ async def search_memory_facts(
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("search_memory_facts failed for query %r", query)
-        return ErrorResponse(error=f"Fact search failed: {exc}")
+        return ErrorResponse(error=f"Fact search failed: {safe_error(exc)}")
 
     return FactSearchResponse(facts=[format_fact(e) for e in edges])
 
@@ -73,6 +74,6 @@ async def search_nodes(
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("search_nodes failed for query %r", query)
-        return ErrorResponse(error=f"Node search failed: {exc}")
+        return ErrorResponse(error=f"Node search failed: {safe_error(exc)}")
 
     return NodeSearchResponse(nodes=[format_node(n) for n in results.nodes])

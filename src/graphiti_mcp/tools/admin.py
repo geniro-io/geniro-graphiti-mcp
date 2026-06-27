@@ -8,6 +8,7 @@ import logging
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 
 from ..engine import GraphitiEngine
+from ..errors import safe_error
 from ..models import ErrorResponse, StatusResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ async def build_communities(
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("build_communities failed")
-        return ErrorResponse(error=f"Failed to build communities: {exc}")
+        return ErrorResponse(error=f"Failed to build communities: {safe_error(exc)}")
 
     return SuccessResponse(message=f"Built {len(communities)} communities.")
 
@@ -43,7 +44,7 @@ async def summarize_saga(
         saga = await engine.client.summarize_saga(saga_id)
     except Exception as exc:  # noqa: BLE001
         logger.exception("summarize_saga failed for %s", saga_id)
-        return ErrorResponse(error=f"Failed to summarize saga {saga_id!r}: {exc}")
+        return ErrorResponse(error=f"Failed to summarize saga {saga_id!r}: {safe_error(exc)}")
 
     summary = getattr(saga, "summary", "") or "(no summary produced)"
     return SuccessResponse(message=summary)
@@ -66,7 +67,7 @@ async def clear_graph(
         await engine.client.build_indices_and_constraints()
     except Exception as exc:  # noqa: BLE001
         logger.exception("clear_graph failed for group %s", gid)
-        return ErrorResponse(error=f"Failed to clear graph for group {gid!r}: {exc}")
+        return ErrorResponse(error=f"Failed to clear graph for group {gid!r}: {safe_error(exc)}")
 
     return SuccessResponse(message=f"Cleared all graph data for group {gid!r}.")
 

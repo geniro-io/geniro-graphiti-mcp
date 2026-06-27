@@ -99,3 +99,15 @@ async def test_add_triplet_propagates_failure(engine, mock_client) -> None:
     )
     assert isinstance(result, ErrorResponse)
     assert "embed failed" in result.error
+
+
+async def test_add_memory_error_redacts_secrets(engine, mock_client) -> None:
+    # An upstream client exception that embeds an API key must NOT reach the
+    # caller verbatim — the secret is redacted from the error response.
+    mock_client.add_episode.side_effect = RuntimeError(
+        "401 Unauthorized: api_key=sk-secret123456789 rejected"
+    )
+    result = await episodes.add_memory(engine, name="n", episode_body="b")
+    assert isinstance(result, ErrorResponse)
+    assert "sk-secret123456789" not in result.error
+    assert "[REDACTED]" in result.error

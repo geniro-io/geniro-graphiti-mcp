@@ -16,6 +16,7 @@ from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EntityNode, EpisodeType
 
 from ..engine import GraphitiEngine
+from ..errors import safe_error
 from ..models import ErrorResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ async def add_memory(
         )
     except Exception as exc:  # noqa: BLE001 - surface every failure to the caller
         logger.exception("add_memory failed for episode %r", name)
-        return ErrorResponse(error=f"Failed to add memory: {exc}")
+        return ErrorResponse(error=f"Failed to add memory: {safe_error(exc)}")
 
     episode_uuid = getattr(getattr(result, "episode", None), "uuid", None)
     return SuccessResponse(
@@ -126,7 +127,7 @@ async def add_triplet(
         await engine.client.add_triplet(source_node, edge, target_node)
     except Exception as exc:  # noqa: BLE001
         logger.exception("add_triplet failed: %s -[%s]-> %s", source_name, edge_name, target_name)
-        return ErrorResponse(error=f"Failed to add triplet: {exc}")
+        return ErrorResponse(error=f"Failed to add triplet: {safe_error(exc)}")
 
     return SuccessResponse(
         message=f"Added triplet: {source_name} -[{edge_name}]-> {target_name}"

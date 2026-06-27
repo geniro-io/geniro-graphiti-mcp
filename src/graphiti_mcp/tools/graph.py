@@ -14,6 +14,7 @@ from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EpisodicNode
 
 from ..engine import GraphitiEngine
+from ..errors import safe_error
 from ..models import (
     EpisodeListResponse,
     ErrorResponse,
@@ -49,7 +50,7 @@ async def get_episodes(
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("get_episodes failed")
-        return ErrorResponse(error=f"Failed to get episodes: {exc}")
+        return ErrorResponse(error=f"Failed to get episodes: {safe_error(exc)}")
 
     return EpisodeListResponse(episodes=[format_episode(e) for e in episodes])
 
@@ -63,7 +64,7 @@ async def get_episode_entities(
         results = await engine.client.get_nodes_and_edges_by_episode([episode_uuid])
     except Exception as exc:  # noqa: BLE001
         logger.exception("get_episode_entities failed for %s", episode_uuid)
-        return ErrorResponse(error=f"Failed to get episode entities: {exc}")
+        return ErrorResponse(error=f"Failed to get episode entities: {safe_error(exc)}")
 
     return NodeSearchResponse(nodes=[format_node(n) for n in results.nodes])
 
@@ -77,7 +78,7 @@ async def get_entity_edge(
         edge = await EntityEdge.get_by_uuid(engine.driver, uuid)
     except Exception as exc:  # noqa: BLE001
         logger.exception("get_entity_edge failed for %s", uuid)
-        return ErrorResponse(error=f"Entity edge {uuid!r} not found: {exc}")
+        return ErrorResponse(error=f"Entity edge {uuid!r} not found: {safe_error(exc)}")
 
     return format_fact(edge)
 
@@ -92,7 +93,7 @@ async def delete_entity_edge(
         await edge.delete(engine.driver)
     except Exception as exc:  # noqa: BLE001
         logger.exception("delete_entity_edge failed for %s", uuid)
-        return ErrorResponse(error=f"Failed to delete entity edge {uuid!r}: {exc}")
+        return ErrorResponse(error=f"Failed to delete entity edge {uuid!r}: {safe_error(exc)}")
 
     return SuccessResponse(message=f"Deleted entity edge {uuid}")
 
@@ -112,6 +113,6 @@ async def delete_episode(
             await EpisodicNode.delete_by_uuids(engine.driver, [episode_uuid])
     except Exception as exc:  # noqa: BLE001
         logger.exception("delete_episode failed for %s", episode_uuid)
-        return ErrorResponse(error=f"Failed to delete episode {episode_uuid!r}: {exc}")
+        return ErrorResponse(error=f"Failed to delete episode {episode_uuid!r}: {safe_error(exc)}")
 
     return SuccessResponse(message=f"Deleted episode {episode_uuid}")

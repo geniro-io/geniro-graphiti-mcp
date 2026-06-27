@@ -10,6 +10,7 @@ from graphiti_mcp.models import (
     EpisodeListResponse,
     ErrorResponse,
     FactResult,
+    NodeSearchResponse,
     StatusResponse,
     SuccessResponse,
 )
@@ -38,6 +39,39 @@ async def test_get_episodes_formats(engine, mock_client) -> None:
 async def test_get_episodes_rejects_nonpositive(engine) -> None:
     result = await graph.get_episodes(engine, last_n=0)
     assert isinstance(result, ErrorResponse)
+
+
+async def test_get_episodes_propagates_failure(engine, mock_client) -> None:
+    mock_client.retrieve_episodes.side_effect = RuntimeError("db error")
+    result = await graph.get_episodes(engine, last_n=5)
+    assert isinstance(result, ErrorResponse)
+    assert "db error" in result.error
+
+
+async def test_get_episode_entities_formats_nodes(engine, mock_client) -> None:
+    node = SimpleNamespace(
+        uuid="n1", name="Alice", summary="", labels=["Entity"],
+        group_id="main", attributes={}, created_at=None,
+    )
+    mock_client.get_nodes_and_edges_by_episode.return_value = SimpleNamespace(nodes=[node])
+    result = await graph.get_episode_entities(engine, "ep-1")
+    assert isinstance(result, NodeSearchResponse)
+    assert result.nodes[0].name == "Alice"
+    mock_client.get_nodes_and_edges_by_episode.assert_awaited_once_with(["ep-1"])
+
+
+async def test_get_episode_entities_handles_empty(engine, mock_client) -> None:
+    mock_client.get_nodes_and_edges_by_episode.return_value = SimpleNamespace(nodes=[])
+    result = await graph.get_episode_entities(engine, "ep-1")
+    assert isinstance(result, NodeSearchResponse)
+    assert result.nodes == []
+
+
+async def test_get_episode_entities_propagates_failure(engine, mock_client) -> None:
+    mock_client.get_nodes_and_edges_by_episode.side_effect = RuntimeError("boom")
+    result = await graph.get_episode_entities(engine, "ep-1")
+    assert isinstance(result, ErrorResponse)
+    assert "boom" in result.error
 
 
 async def test_delete_entity_edge_propagates_failure(engine) -> None:
@@ -82,6 +116,13 @@ async def test_delete_episode_uses_remove_episode(engine, mock_client) -> None:
     mock_client.remove_episode.assert_awaited_once_with("ep-1")
 
 
+async def test_delete_episode_propagates_failure(engine, mock_client) -> None:
+    mock_client.remove_episode.side_effect = RuntimeError("delete failed")
+    result = await graph.delete_episode(engine, "ep-1")
+    assert isinstance(result, ErrorResponse)
+    assert "delete failed" in result.error
+
+
 # ── admin ──────────────────────────────────────────────────────────────────
 
 
@@ -90,6 +131,13 @@ async def test_build_communities_reports_count(engine, mock_client) -> None:
     result = await admin.build_communities(engine)
     assert isinstance(result, SuccessResponse)
     assert "2 communities" in result.message
+
+
+async def test_build_communities_propagates_failure(engine, mock_client) -> None:
+    mock_client.build_communities.side_effect = RuntimeError("algo failed")
+    result = await admin.build_communities(engine)
+    assert isinstance(result, ErrorResponse)
+    assert "algo failed" in result.error
 
 
 async def test_clear_graph_is_group_scoped(engine, mock_client) -> None:
@@ -103,11 +151,28 @@ async def test_clear_graph_is_group_scoped(engine, mock_client) -> None:
     mock_client.build_indices_and_constraints.assert_awaited()
 
 
+async def test_clear_graph_propagates_failure(engine, mock_client) -> None:
+    with patch(
+        "graphiti_mcp.tools.admin.clear_data",
+        new=AsyncMock(side_effect=RuntimeError("wipe failed")),
+    ):
+        result = await admin.clear_graph(engine, group_id="proj")
+    assert isinstance(result, ErrorResponse)
+    assert "wipe failed" in result.error
+
+
 async def test_summarize_saga_returns_summary(engine, mock_client) -> None:
     mock_client.summarize_saga.return_value = Mock(summary="the saga so far")
     result = await admin.summarize_saga(engine, "saga-1")
     assert isinstance(result, SuccessResponse)
     assert result.message == "the saga so far"
+
+
+async def test_summarize_saga_propagates_failure(engine, mock_client) -> None:
+    mock_client.summarize_saga.side_effect = RuntimeError("summary failed")
+    result = await admin.summarize_saga(engine, "saga-1")
+    assert isinstance(result, ErrorResponse)
+    assert "summary failed" in result.error
 
 
 async def test_get_status_healthy(engine, mock_client) -> None:
