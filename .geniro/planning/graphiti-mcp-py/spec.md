@@ -5,12 +5,12 @@ schema-version: 1
 branch: claude/geniro-fork-dynamic-workflows-criwgf
 timestamp: 2026-06-27T21:06:35Z
 geniro_kind: design-doc
-geniro_schema_version: m5-v1
+geniro_schema_version: m5-v4
 task_slug: graphiti-mcp-py
 topic: "Clean-room Python rewrite of the Graphiti MCP server for the Claude CLI, embedding graphiti-core with synchronous writes over Neo4j."
 mode: IDEA
 effort_tier: medium
-lifecycle: draft
+lifecycle: approved
 budget:
   max_files_to_edit: null
   max_lines_changed: null
@@ -30,6 +30,11 @@ forbidden_actions:
 approval_required_for:
   - step-12
 tools_required: ["uv", "docker", "ollama"]
+launch_config:
+  workspace: current-branch
+  deep_mode: false
+  branch_freshness: skip
+  ship_mode: commit-no-push
 ---
 
 <!-- geniro:design-doc -->
