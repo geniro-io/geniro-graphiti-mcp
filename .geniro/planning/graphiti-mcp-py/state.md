@@ -5,7 +5,7 @@ schema-version: 1
 branch: claude/geniro-fork-dynamic-workflows-criwgf
 worktree: /home/user/geniro-graphiti-mcp
 timestamp: 2026-06-27T20:42:33Z
-phase: explore
+phase: clarify
 status: in-progress
 non-resumable-actions: []
 approvals: []
@@ -69,3 +69,35 @@ deep-mode: false
 - QUEUE DIRECTION: simplest-correct. Default = synchronous awaited writes (await graphiti.add_episode) — no background worker, no Redis, errors propagate to the caller. This is the "easier solution" and structurally eliminates the #566 / fail(requeue=False) drop bugs. (Confirm in grill whether any minimal in-process async is wanted; lean: no queue.)
 - Mirror upstream tool surface/names where sensible for familiarity, but our own clean implementation.
 - Tier confirmed: Medium, single spec.
+
+## Source-grounded findings (downloaded upstream + fork, 2026-06-27T20:51:05Z)
+- Upstream getzep/graphiti mcp_server uses FastMCP (mcp.server.fastmcp). Transports: stdio / http(streamable, default) / sse(deprecated).
+- Upstream TOOL SURFACE (src/graphiti_mcp_server.py): add_memory, search_nodes, search_memory_facts, get_episodes, get_episode_entities, get_entity_edge, delete_entity_edge, delete_episode, add_triplet, build_communities, summarize_saga, clear_graph, get_status. Plus a status resource.
+- Upstream QUEUE (src/services/queue_service.py): per-group_id in-memory asyncio.Queue + background worker. add_memory enqueues and RETURNS IMMEDIATELY ("processes in the background"). On processing error the worker only logs (silent drop); a process crash loses the whole in-memory queue. THIS is the durability bug class we remove by awaiting writes directly.
+- Upstream PROVIDERS (src/config/schema.py, pydantic BaseSettings + YAML + env overrides): LLM = openai|azure|anthropic|gemini|groq; Embedder = openai|gemini|voyage (default text-embedding-3-small, 1536 dims); DB = neo4j|falkordb. Defaults: llm gpt-5.5, embedder text-embedding-3-small, db falkordb, group_id 'main', user_id 'mcp_user'.
+- Fork michabbb adds Redis BRPOPLPUSH durable queue + auth(nonce) + group_id context; its queue/worker.py drops on processing error (fail(requeue=False) -> LREM, no DLQ). We avoid the entire queue layer, so this whole module class disappears.
+- IMPLICATION for rewrite: keep add_memory's tool name/params but make it AWAIT graphiti.add_episode and return real success/failure. Drop queue_service entirely. get_status reports connectivity, not queue depth.
+
+## Open decisions for grill (Phase 3)
+1. LLM + embedder provider config (embedder is REQUIRED even w/ Anthropic LLM).
+2. Tool surface scope for v1 (full upstream set vs lean core).
+3. Config style: env-vars-only vs YAML+env (upstream uses YAML).
+4. Test strategy: how Neo4j is provided in tests (mock graphiti / testcontainers / live).
+5. Packaging/run for Claude CLI (uvx/pipx; Neo4j via docker-compose).
+
+## Grill answers (2026-06-27T20:56:13Z)
+- Tool surface = FULL UPSTREAM PARITY (all ~13 tools: add_memory, search_nodes, search_memory_facts, get_episodes, get_episode_entities, get_entity_edge, delete_entity_edge, delete_episode, add_triplet, build_communities, summarize_saga, clear_graph, get_status).
+- Test strategy = TESTCONTAINERS integration (real Neo4j spun in tests) + unit tests.
+- Provider config: user asked "why configure providers for mcp if graphiti server already configured?" -> surfaced architecture fork A vs B; resolving with a clarifying question. Pending.
+- Packaging: user unsure -> recommending uv project + docker-compose Neo4j.
+- Research workflow wyvfenj6q complete (5 facets+synthesis). Key reusable: graphiti-core API cheatsheet (add_episode kw signature, EpisodeType, search vs search_/SearchResults, OpenAIGenericClient vs OpenAIClient for #1116, build_indices_and_constraints, await-all, graphiti.close()). Output: tasks/wyvfenj6q.output. NOTE: use Neo4jDriver not FalkorDriver; ignore the synthesis's JWT/HTTP framing (dropped per local-CLI scope).
+
+## Final settled design (2026-06-27T21:00:46Z)
+- Architecture A: MCP embeds graphiti-core; builds Graphiti(Neo4jDriver,...) in-process; awaits add_episode/search; no queue; no separate graphiti server.
+- TWO models (user-confirmed): main LLM (extraction) + embedder (vectors), independently env-configurable. Default both OpenAI (gpt-4.1-mini-ish + text-embedding-3-small 1536d); switchable LLM->Anthropic/Gemini/Groq, embedder->Voyage/Ollama(nomic-embed-text 768d). Use OpenAIGenericClient for OpenAI-compatible/Ollama base_url (avoids #1116).
+- Neo4j: bundled minimal docker-compose.yml (neo4j:5.26+, 7474/7687) for one-command local DB; OR bring-your-own via NEO4J_URI/USER/PASSWORD/DATABASE env. MCP server runs on host (stdio), not containerized.
+- Packaging: uv + pip. pyproject.toml, console_script entry 'graphiti-mcp', runnable via 'uvx'/'uv run' AND pip/pipx install. claude mcp add -> command = graphiti-mcp (stdio).
+- Tools: FULL upstream parity (~13), our clean impl, add_memory awaits (synchronous).
+- Tests: testcontainers (real Neo4j) integration + unit tests; pytest.
+- Config: env vars / .env (pydantic-settings), no YAML layer.
+- build_indices_and_constraints() at startup; graphiti.close() at shutdown.
