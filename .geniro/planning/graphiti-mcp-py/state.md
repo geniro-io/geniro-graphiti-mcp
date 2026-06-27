@@ -5,10 +5,26 @@ schema-version: 1
 branch: claude/geniro-fork-dynamic-workflows-criwgf
 worktree: /home/user/geniro-graphiti-mcp
 timestamp: 2026-06-27T20:42:33Z
-phase: user-approve
+phase: done
 status: in-progress
-non-resumable-actions: []
-approvals: []
+non-resumable-actions:
+  - action: git-commit
+    completed-at: 2026-06-27T21:09:10Z
+    commit-sha: 33d36c2e00d4899ac5a32092dd49d9a7d5385a6f
+    files: ['.geniro/planning/graphiti-mcp-py/spec.md']
+approvals:
+  - category: approach_choice
+    picked: 'Architecture A — embed graphiti-core in-process (Python)'
+    at: 2026-06-27T21:09:10Z
+  - category: section_objective
+    picked: approve
+    at: 2026-06-27T21:09:10Z
+  - category: final_approve
+    picked: 'Approve — commit the plan'
+    at: 2026-06-27T21:09:10Z
+  - category: launch_config
+    picked: 'current-branch / skip / commit-no-push / standard'
+    at: 2026-06-27T21:09:10Z
 task_slug: graphiti-mcp-py
 mode: IDEA
 deep-mode: false
