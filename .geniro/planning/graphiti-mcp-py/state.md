@@ -5,7 +5,7 @@ schema-version: 1
 branch: claude/geniro-fork-dynamic-workflows-criwgf
 worktree: /home/user/geniro-graphiti-mcp
 timestamp: 2026-06-27T20:42:33Z
-phase: clarify
+phase: user-approve
 status: in-progress
 non-resumable-actions: []
 approvals: []
@@ -101,3 +101,53 @@ deep-mode: false
 - Tests: testcontainers (real Neo4j) integration + unit tests; pytest.
 - Config: env vars / .env (pydantic-settings), no YAML layer.
 - build_indices_and_constraints() at startup; graphiti.close() at shutdown.
+
+## FINAL provider resolution (2026-06-27T21:04:40Z)
+- Main LLM: default OpenAI gpt-5.5. Provider factory keyed by env LLM_PROVIDER:
+  * openai (OpenAIClient, default model gpt-5.5)
+  * anthropic (graphiti AnthropicClient, native Claude support)
+  * openai_generic / openai-compatible (OpenAIGenericClient + LLM_BASE_URL) -> covers LiteLLM proxy (100+ providers) AND Ollama AND any compatible gateway.
+  env: LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, OPENAI_API_KEY/ANTHROPIC_API_KEY.
+- Embedder: default Ollama qwen3-embedding:8b, EMBEDDER_DIM=4096, via OpenAIEmbedder(base_url=ollama). Switchable: openai (text-embedding-3-small,1536) | voyage | any openai-compatible base_url.
+  env: EMBEDDER_PROVIDER, EMBEDDER_MODEL, EMBEDDER_DIM, EMBEDDER_BASE_URL.
+- CAUTION baked into Risks: embedder model must be an EMBEDDING model (qwen3-embedding:* NOT qwen3:8b chat); EMBEDDER_DIM must match the model or search breaks; OpenAIGenericClient (not OpenAIClient) for base_url to avoid #1116.
+- DESIGN FULLY SETTLED -> proceeding to author spec.md.
+
+## Tool log (research + authoring)
+- ts: 2026-06-27T21:07:22Z
+  tool: Agent
+  detail: "Research: upstream getzep/graphiti mcp_server tool surface + queue bug"
+  status: ok
+  summary: "13 tools, FastMCP, in-memory asyncio.Queue silent-drop confirmed"
+  citations:
+  - refs/graphiti-main/mcp_server/src/graphiti_mcp_server.py:341
+  - refs/graphiti-main/mcp_server/src/services/queue_service.py:60
+- ts: 2026-06-27T21:07:22Z
+  tool: Agent
+  detail: "Research: graphiti-core library API (add_episode/search/indices/providers)"
+  status: ok
+  summary: "kw signatures, EpisodeType, OpenAIGenericClient vs OpenAIClient #1116"
+  citations:
+  - refs/graphiti-main/graphiti_core/graphiti.py:1
+- ts: 2026-06-27T21:07:22Z
+  tool: Agent
+  detail: "Research: michabbb fork structure + fail(requeue=False) drop bug"
+  status: ok
+  summary: "Redis queue + the no-DLQ drop; we drop the queue layer entirely"
+  citations:
+  - refs/graphiti-mcp-but-working-main/graphiti_mcp_server/queue/worker.py:1
+- ts: 2026-06-27T21:07:22Z
+  tool: Agent
+  detail: "Research: MCP Python SDK / FastMCP transports + config"
+  status: ok
+  summary: "FastMCP stdio/http; pydantic tool IO"
+  citations:
+  - refs/graphiti-main/mcp_server/src/config/schema.py:76
+- ts: 2026-06-27T21:07:22Z
+  tool: atomic_state_write
+  detail: ".geniro/planning/graphiti-mcp-py/spec.md"
+  status: ok
+  result_ref: "128 lines, 11 sections + Considered Alternatives"
+
+## Validator result (Phase 7, orchestrator-side)
+- single_objective: pass; bounded_scope: pass; source_materials: pass (>=4 Agent ok entries, Medium tier); allowed_tools: pass (sec7 <-> tools_required); forbidden_actions: pass; budget: pass; checkpoints: pass (3, >=5 steps); validation_method: pass; stopping_condition: pass; placeholder_scan: pass; contradiction_heuristic: pass; scope_creep_marker: pass (steps within src/graphiti_mcp/** + declared root files); schema_completeness: pass (11 + Considered Alternatives); workflow_refs_consistency: skip (m5-v1); launch_config_consistency: skip (absent). VALIDATOR CLEAN.
