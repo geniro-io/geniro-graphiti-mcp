@@ -62,3 +62,10 @@ deep-mode: false
 
 ## Settled Decision — Graph store (user, 2026-06-27)
 - GRAPH STORE: Neo4j (NOT FalkorDB). Neo4j is graphiti-core's default/best-supported driver (Neo4jDriver, requires Neo4j 5.26+). Overrides the integration-plan's FalkorDB pick.
+
+## Settled Decision — Goal & "fork from scratch" meaning (user, 2026-06-27)
+- GOAL: a clean-room REWRITE of the initial/upstream graphiti MCP server (getzep/graphiti mcp_server), NOT a vendor/patch of existing code.
+  Deliver: (1) clean, readable code; (2) a real TEST SUITE (upstream + all forks have zero tests); (3) NO silent-drop bug; (4) a CLEANER, EASIER queue solution.
+- QUEUE DIRECTION: simplest-correct. Default = synchronous awaited writes (await graphiti.add_episode) — no background worker, no Redis, errors propagate to the caller. This is the "easier solution" and structurally eliminates the #566 / fail(requeue=False) drop bugs. (Confirm in grill whether any minimal in-process async is wanted; lean: no queue.)
+- Mirror upstream tool surface/names where sensible for familiarity, but our own clean implementation.
+- Tier confirmed: Medium, single spec.
