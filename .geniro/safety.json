@@ -1,0 +1,4 @@
+{
+  "allow_patterns": ["write-env"],
+  "_note": "Permits writing .env.example (placeholders only, no secrets). Real .env stays git-ignored and is never written by tooling."
+}
