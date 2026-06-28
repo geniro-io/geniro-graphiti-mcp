@@ -19,7 +19,7 @@ from mcp.server.fastmcp import FastMCP
 from .config import load_settings
 from .engine import EngineNotInitializedError, GraphitiEngine
 from .models import EpisodeInput
-from .tools import admin, episodes, graph, groups, search
+from .tools import admin, episodes as episode_tools, graph, groups, search
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ async def add_memory(
 
     Returns success only after the write completes; on failure returns an error.
     """
-    result = await episodes.add_memory(
+    result = await episode_tools.add_memory(
         get_engine(),
         name=name,
         episode_body=episode_body,
@@ -113,7 +113,7 @@ async def add_memory_bulk(
     dropped. Each item: name, episode_body, and optional source
     ("message"|"text"|"json"), source_description, reference_time (ISO-8601), uuid.
     """
-    result = await episodes.add_memory_bulk(get_engine(), episodes, group_id=group_id)
+    result = await episode_tools.add_memory_bulk(get_engine(), episodes, group_id=group_id)
     return result.model_dump()
 
 
@@ -126,7 +126,7 @@ async def add_triplet(
     group_id: str | None = None,
 ) -> dict:
     """Add an explicit (source)-[edge]->(target) fact triplet."""
-    result = await episodes.add_triplet(
+    result = await episode_tools.add_triplet(
         get_engine(),
         source_name=source_name,
         edge_name=edge_name,
