@@ -182,6 +182,15 @@ async def test_get_status_healthy(engine, mock_client) -> None:
     assert result.neo4j_connected is True
     assert result.status == "ok"
     assert result.llm_model == "gpt-5.5"
+    assert result.workspace == "main"
+
+
+async def test_get_status_reports_configured_workspace(engine, mock_client) -> None:
+    engine.settings.workspace = "project-b"
+    mock_client.driver.execute_query = AsyncMock(return_value=None)
+    result = await admin.get_status(engine)
+    assert result.workspace == "project-b"
+    assert result.group_id == "project-b"
 
 
 async def test_get_status_degraded_when_neo4j_down(engine, mock_client) -> None:

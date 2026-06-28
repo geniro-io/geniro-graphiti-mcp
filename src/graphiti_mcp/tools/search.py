@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_group_ids(engine: GraphitiEngine, group_id: str | None) -> list[str]:
-    return [group_id or engine.settings.graphiti_group_id]
+    return [group_id or engine.settings.default_group_id]
 
 
 async def search_memory_facts(

@@ -29,7 +29,7 @@ _EPISODE_TYPES = {
 
 
 def _resolve_group_id(engine: GraphitiEngine, group_id: str | None) -> str:
-    return group_id or engine.settings.graphiti_group_id
+    return group_id or engine.settings.default_group_id
 
 
 async def add_memory(
@@ -50,7 +50,8 @@ async def add_memory(
         episode_body: The content. For ``source="json"`` this is a JSON string.
         source: One of ``message`` | ``text`` | ``json``.
         source_description: Provenance note (e.g. "user chat", "api payload").
-        group_id: Memory namespace; defaults to the server's ``GRAPHITI_GROUP_ID``.
+        group_id: Memory namespace (workspace) to write into; defaults to the
+            server's configured workspace (``GRAPHITI_WORKSPACE``).
         reference_time: ISO-8601 timestamp for the episode; defaults to now (UTC).
         uuid: Optional explicit episode UUID (for idempotent re-ingest).
 

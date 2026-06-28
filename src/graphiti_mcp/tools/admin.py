@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_group_id(engine: GraphitiEngine, group_id: str | None) -> str:
-    return group_id or engine.settings.graphiti_group_id
+    return group_id or engine.settings.default_group_id
 
 
 async def build_communities(
@@ -89,7 +89,8 @@ async def get_status(engine: GraphitiEngine) -> StatusResponse:
         embedder_provider=s.embedder_provider.value,
         embedder_model=s.embedder_model,
         embedder_dim=s.embedder_dim,
-        group_id=s.graphiti_group_id,
+        workspace=s.default_group_id,
+        group_id=s.default_group_id,
         message=(
             "Neo4j reachable; providers resolved."
             if connected

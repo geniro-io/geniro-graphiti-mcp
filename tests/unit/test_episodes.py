@@ -58,6 +58,14 @@ async def test_add_memory_explicit_group_id_overrides(engine, mock_client) -> No
     assert mock_client.add_episode.await_args.kwargs["group_id"] == "other"
 
 
+async def test_add_memory_uses_configured_workspace(engine, mock_client) -> None:
+    # When a workspace is configured, ingests land in it by default.
+    engine.settings.workspace = "project-a"
+    mock_client.add_episode.return_value = Mock(episode=Mock(uuid="ep-1"))
+    await episodes.add_memory(engine, name="n", episode_body="b")
+    assert mock_client.add_episode.await_args.kwargs["group_id"] == "project-a"
+
+
 async def test_add_memory_invalid_source_rejected_without_calling_engine(engine, mock_client) -> None:
     result = await episodes.add_memory(
         engine, name="n", episode_body="b", source="not-a-type"

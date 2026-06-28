@@ -68,14 +68,14 @@ class GraphitiEngine:
         )
 
         logger.info(
-            "Graphiti initialized: neo4j=%s llm=%s/%s embedder=%s/%s(dim=%d) group_id=%s",
+            "Graphiti initialized: neo4j=%s llm=%s/%s embedder=%s/%s(dim=%d) workspace=%s",
             s.neo4j_uri,
             s.llm_provider.value,
             s.llm_model,
             s.embedder_provider.value,
             s.embedder_model,
             s.embedder_dim,
-            s.graphiti_group_id,
+            s.default_group_id,
         )
         await self._graphiti.build_indices_and_constraints()
 

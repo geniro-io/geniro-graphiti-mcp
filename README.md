@@ -80,7 +80,37 @@ All configuration is via environment variables (or `.env`). See
 | `EMBEDDER_MODEL` | `qwen3-embedding:8b` | **Must be an embedding model** |
 | `EMBEDDER_DIM` | `4096` | **Must match the model's output dimension** |
 | `EMBEDDER_BASE_URL` | `http://localhost:11434/v1` | Ollama default |
-| `GRAPHITI_GROUP_ID` | `main` | Optional memory namespace |
+| `GRAPHITI_WORKSPACE` | `main` | Memory namespace — see [Workspaces](#workspaces--memory-per-project) |
+| `GRAPHITI_GROUP_ID` | `main` | Backward-compatible alias for `GRAPHITI_WORKSPACE` |
+
+### Workspaces — memory per project
+
+A **workspace** partitions memory so a single server can serve many projects
+without mixing their knowledge. It's a namespace key (`group_id` under the hood),
+not a security boundary.
+
+**Recommended: one registration per project.** Register the MCP separately for
+each project with its own workspace via env — Claude in that project then only
+ever reads and writes its own memory, with no chance of cross-contamination:
+
+```bash
+# In project A's repo:
+claude mcp add graphiti -- env GRAPHITI_WORKSPACE=project-a \
+  uv run --directory /path/to/geniro-graphiti-mcp graphiti-mcp
+
+# In project B's repo:
+claude mcp add graphiti -- env GRAPHITI_WORKSPACE=project-b \
+  uv run --directory /path/to/geniro-graphiti-mcp graphiti-mcp
+```
+
+Everything (ingest, search, communities, `clear_graph`) is then scoped to that
+workspace automatically — the agent never has to pass a key.
+
+**Per-call override.** Even within one registration you can target another
+workspace ad hoc: the ingest/search/admin tools accept an optional `group_id`
+argument that overrides the configured default for that call. `get_status`
+reports the active workspace, and `list_group_ids` lists every workspace present
+in the graph.
 
 ### Provider notes
 

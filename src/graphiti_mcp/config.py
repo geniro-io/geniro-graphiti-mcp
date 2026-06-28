@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +46,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
     # ── Neo4j ────────────────────────────────────────────────────────
@@ -72,11 +73,24 @@ class Settings(BaseSettings):
     embedder_api_key: str | None = None
     voyage_api_key: str | None = None
 
-    # ── Graphiti behaviour ───────────────────────────────────────────
-    # Optional namespacing for memories — not a security boundary.
+    # ── Workspace (memory namespace) ─────────────────────────────────
+    # A workspace partitions memory so one MCP can serve many projects.
+    # Set GRAPHITI_WORKSPACE per registration (e.g. one project = one
+    # workspace) for hard isolation. It is a partition key, not a security
+    # boundary. `GRAPHITI_GROUP_ID` remains a backward-compatible alias
+    # (graphiti-core's native term); `workspace` wins when both are set.
+    workspace: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("workspace", "GRAPHITI_WORKSPACE"),
+    )
     graphiti_group_id: str = Field(default="main")
     # Concurrency cap for graphiti-core's internal coroutines.
     semaphore_limit: int = 10
+
+    @property
+    def default_group_id(self) -> str:
+        """The effective workspace/group_id when a call doesn't specify one."""
+        return self.workspace or self.graphiti_group_id
 
     @property
     def resolved_embedder_api_key(self) -> str | None:

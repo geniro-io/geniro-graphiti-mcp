@@ -103,6 +103,7 @@ class StatusResponse(BaseModel):
     embedder_provider: str
     embedder_model: str
     embedder_dim: int
+    workspace: str
     group_id: str
     message: str = ""
 
