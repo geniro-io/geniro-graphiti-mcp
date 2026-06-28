@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Lint-import check (package imports cleanly)
+        run: uv run python -c "import graphiti_mcp.server"
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit -q
+
+  integration:
+    name: Integration tests (Docker)
+    runs-on: ubuntu-latest
+    # Integration tests need an LLM/embedder key; only run when one is configured.
+    # They self-skip without OPENAI_API_KEY, so this job is safe either way.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run integration tests (testcontainers Neo4j)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run pytest -m integration -q

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+
+# uv: uv.lock IS tracked (committed) for reproducible server deployments.
+
+# Environment / secrets — NEVER commit real credentials
+.env
+.env.local
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Neo4j local data (if a bind-mount is used)
+neo4j_data/
