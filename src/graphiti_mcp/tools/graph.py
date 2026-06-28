@@ -18,7 +18,7 @@ from ..errors import safe_error
 from ..models import (
     EpisodeListResponse,
     ErrorResponse,
-    FactResult,
+    FactResponse,
     NodeSearchResponse,
     SuccessResponse,
     format_episode,
@@ -72,15 +72,17 @@ async def get_episode_entities(
 async def get_entity_edge(
     engine: GraphitiEngine,
     uuid: str,
-) -> FactResult | ErrorResponse:
+) -> FactResponse | ErrorResponse:
     """Return a single relationship edge by UUID."""
     try:
         edge = await EntityEdge.get_by_uuid(engine.driver, uuid)
     except Exception as exc:  # noqa: BLE001
         logger.exception("get_entity_edge failed for %s", uuid)
-        return ErrorResponse(error=f"Entity edge {uuid!r} not found: {safe_error(exc)}")
+        # Neutral phrasing: the failure may be a missing edge OR a transient DB
+        # error — don't assert "not found" for every cause.
+        return ErrorResponse(error=f"Failed to get entity edge {uuid!r}: {safe_error(exc)}")
 
-    return format_fact(edge)
+    return FactResponse(fact=format_fact(edge))
 
 
 async def delete_entity_edge(

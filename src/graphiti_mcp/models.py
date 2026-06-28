@@ -84,6 +84,18 @@ class EpisodeListResponse(BaseModel):
     episodes: list[EpisodeResult]
 
 
+class FactResponse(BaseModel):
+    """A single fact (edge) wrapped in the uniform ``status`` envelope.
+
+    Mirrors the list responses so every tool's success payload carries ``status``
+    — a client can discriminate success from :class:`ErrorResponse` the same way
+    for every tool.
+    """
+
+    status: str = "success"
+    fact: FactResult
+
+
 class GroupIdListResponse(BaseModel):
     """The distinct group_ids (memory namespaces) present in the graph."""
 

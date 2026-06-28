@@ -6,10 +6,13 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+
+from graphiti_mcp.engine import EngineNotInitializedError, GraphitiEngine
 from graphiti_mcp.models import (
     EpisodeListResponse,
     ErrorResponse,
-    FactResult,
+    FactResponse,
     NodeSearchResponse,
     StatusResponse,
     SuccessResponse,
@@ -106,8 +109,10 @@ async def test_get_entity_edge_formats(engine) -> None:
         new=AsyncMock(return_value=edge),
     ):
         result = await graph.get_entity_edge(engine, "e1")
-    assert isinstance(result, FactResult)
-    assert result.fact == "a fact"
+    # Wrapped in the uniform status envelope (FactResponse), like every other tool.
+    assert isinstance(result, FactResponse)
+    assert result.status == "success"
+    assert result.fact.fact == "a fact"
 
 
 async def test_delete_episode_uses_remove_episode(engine, mock_client) -> None:
@@ -175,6 +180,14 @@ async def test_summarize_saga_propagates_failure(engine, mock_client) -> None:
     assert "summary failed" in result.error
 
 
+async def test_summarize_saga_empty_summary_uses_fallback(engine, mock_client) -> None:
+    # graphiti returns a saga with no usable summary → user-visible placeholder.
+    mock_client.summarize_saga.return_value = SimpleNamespace(summary="")
+    result = await admin.summarize_saga(engine, "saga-1")
+    assert isinstance(result, SuccessResponse)
+    assert result.message == "(no summary produced)"
+
+
 async def test_get_status_healthy(engine, mock_client) -> None:
     mock_client.driver.execute_query = AsyncMock(return_value=None)
     result = await admin.get_status(engine)
@@ -182,7 +195,10 @@ async def test_get_status_healthy(engine, mock_client) -> None:
     assert result.neo4j_connected is True
     assert result.status == "ok"
     assert result.llm_model == "gpt-5.5"
-    assert result.workspace == "main"
+    # No workspace configured (only graphiti_group_id="main"): workspace reports
+    # empty truthfully, while group_id is the effective namespace.
+    assert result.workspace == ""
+    assert result.group_id == "main"
 
 
 async def test_get_status_reports_configured_workspace(engine, mock_client) -> None:
@@ -198,3 +214,14 @@ async def test_get_status_degraded_when_neo4j_down(engine, mock_client) -> None:
     result = await admin.get_status(engine)
     assert result.neo4j_connected is False
     assert result.status == "degraded"
+
+
+# ── engine guard ────────────────────────────────────────────────────────────
+
+
+def test_engine_client_raises_before_initialize(settings) -> None:
+    # Using a tool before the lifespan initialized the engine must raise, not
+    # silently operate on a None client.
+    eng = GraphitiEngine(settings)
+    with pytest.raises(EngineNotInitializedError):
+        _ = eng.client

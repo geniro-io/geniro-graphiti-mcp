@@ -6,7 +6,8 @@ These tests encode the entire reason this rewrite exists — there is no queue, 
 
 from __future__ import annotations
 
-from unittest.mock import Mock
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -64,6 +65,67 @@ async def test_add_memory_uses_configured_workspace(engine, mock_client) -> None
     mock_client.add_episode.return_value = Mock(episode=Mock(uuid="ep-1"))
     await episodes.add_memory(engine, name="n", episode_body="b")
     assert mock_client.add_episode.await_args.kwargs["group_id"] == "project-a"
+
+
+async def test_add_memory_forwards_reference_time_and_uuid(engine, mock_client) -> None:
+    # A valid ISO timestamp is parsed and forwarded, and the idempotency uuid
+    # passes through — neither is silently dropped.
+    mock_client.add_episode.return_value = Mock(episode=Mock(uuid="ep-1"))
+    await episodes.add_memory(
+        engine, name="n", episode_body="b",
+        reference_time="2026-01-02T03:04:05+00:00", uuid="ep-x",
+    )
+    kwargs = mock_client.add_episode.await_args.kwargs
+    assert kwargs["uuid"] == "ep-x"
+    assert kwargs["reference_time"] == datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+
+
+async def test_add_memory_naive_reference_time_normalized_to_utc(engine, mock_client) -> None:
+    mock_client.add_episode.return_value = Mock(episode=Mock(uuid="ep-1"))
+    await episodes.add_memory(
+        engine, name="n", episode_body="b", reference_time="2026-01-02T03:04:05"
+    )
+    ref = mock_client.add_episode.await_args.kwargs["reference_time"]
+    assert ref.tzinfo is not None
+    assert ref == datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+
+
+async def test_add_memory_surfaces_embedder_dim_mismatch_as_error(engine, mock_client) -> None:
+    # A wrong EMBEDDER_DIM is caught on the first ingest as a synchronous error,
+    # not a false success that yields empty search later (spec risk-5).
+    engine._embedder_checked = False  # type: ignore[attr-defined]
+    mock_client.embedder.create = AsyncMock(return_value=[0.0] * 512)  # configured dim is 1536
+    result = await episodes.add_memory(engine, name="n", episode_body="b")
+    assert isinstance(result, ErrorResponse)
+    assert "512" in result.error
+    assert "EMBEDDER_DIM" in result.error
+    mock_client.add_episode.assert_not_called()
+
+
+async def test_ensure_embedder_dim_passes_when_matching(engine, mock_client) -> None:
+    engine._embedder_checked = False  # type: ignore[attr-defined]
+    mock_client.embedder.create = AsyncMock(return_value=[0.0] * 1536)
+    await engine.ensure_embedder_dim()
+    assert engine._embedder_checked is True
+
+
+async def test_add_triplet_uses_resolved_group_id(engine, mock_client) -> None:
+    await episodes.add_triplet(
+        engine, source_name="A", edge_name="R", target_name="B", fact="f"
+    )
+    source_node, edge, target_node = mock_client.add_triplet.await_args.args
+    assert source_node.group_id == "main"
+    assert target_node.group_id == "main"
+    assert edge.group_id == "main"
+
+
+async def test_add_triplet_explicit_group_id_overrides(engine, mock_client) -> None:
+    await episodes.add_triplet(
+        engine, source_name="A", edge_name="R", target_name="B", fact="f", group_id="proj"
+    )
+    source_node, edge, target_node = mock_client.add_triplet.await_args.args
+    assert source_node.group_id == "proj"
+    assert edge.group_id == "proj"
 
 
 async def test_add_memory_invalid_source_rejected_without_calling_engine(engine, mock_client) -> None:

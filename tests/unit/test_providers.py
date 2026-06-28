@@ -8,7 +8,9 @@ from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 
 from graphiti_mcp.config import EmbedderProvider, LLMProvider, Settings
 from graphiti_mcp.providers import (
+    PassthroughCrossEncoder,
     ProviderConfigError,
+    build_cross_encoder,
     build_embedder,
     build_llm_client,
 )
@@ -86,3 +88,44 @@ def test_embedder_openai_requires_key() -> None:
         build_embedder(
             _settings(embedder_provider=EmbedderProvider.OPENAI, openai_api_key=None)
         )
+
+
+# ── cross-encoder: never require an unrelated OpenAI key on non-OpenAI setups ──
+
+
+def test_cross_encoder_openai_is_real_reranker() -> None:
+    from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
+
+    ce = build_cross_encoder(_settings(llm_provider=LLMProvider.OPENAI))
+    assert isinstance(ce, OpenAIRerankerClient)
+
+
+def test_cross_encoder_anthropic_is_passthrough_no_openai_key_needed() -> None:
+    # The bug E2E caught: a pure-Anthropic deploy must not need OPENAI_API_KEY.
+    ce = build_cross_encoder(
+        _settings(
+            llm_provider=LLMProvider.ANTHROPIC,
+            anthropic_api_key="sk-ant-x",
+            openai_api_key=None,
+        )
+    )
+    assert isinstance(ce, PassthroughCrossEncoder)
+
+
+def test_cross_encoder_openai_generic_is_passthrough() -> None:
+    ce = build_cross_encoder(
+        _settings(
+            llm_provider=LLMProvider.OPENAI_GENERIC,
+            llm_base_url="http://localhost:11434/v1",
+            openai_api_key=None,
+        )
+    )
+    assert isinstance(ce, PassthroughCrossEncoder)
+
+
+async def test_passthrough_cross_encoder_preserves_order() -> None:
+    ce = PassthroughCrossEncoder()
+    ranked = await ce.rank("q", ["first", "second", "third"])
+    assert [p for p, _ in ranked] == ["first", "second", "third"]
+    # Descending scores, as the interface requires.
+    assert ranked[0][1] > ranked[-1][1]

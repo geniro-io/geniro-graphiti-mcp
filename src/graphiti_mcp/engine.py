@@ -14,7 +14,12 @@ from graphiti_core import Graphiti
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 
 from .config import Settings
-from .providers import build_embedder, build_llm_client
+from .providers import (
+    ProviderConfigError,
+    build_cross_encoder,
+    build_embedder,
+    build_llm_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +34,9 @@ class GraphitiEngine:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._graphiti: Graphiti | None = None
+        # Set once the embedder's real output dimension has been verified against
+        # EMBEDDER_DIM (lazy, on first ingest) — see :meth:`ensure_embedder_dim`.
+        self._embedder_checked = False
 
     @property
     def client(self) -> Graphiti:
@@ -59,11 +67,15 @@ class GraphitiEngine:
         )
         llm_client = build_llm_client(s)
         embedder = build_embedder(s)
+        # Pass an explicit reranker so construction never requires an unrelated
+        # OpenAI key (graphiti defaults to an OpenAI cross-encoder otherwise).
+        cross_encoder = build_cross_encoder(s)
 
         self._graphiti = Graphiti(
             graph_driver=driver,
             llm_client=llm_client,
             embedder=embedder,
+            cross_encoder=cross_encoder,
             max_coroutines=s.semaphore_limit,
         )
 
@@ -85,6 +97,32 @@ class GraphitiEngine:
             await self._graphiti.close()
             self._graphiti = None
             logger.info("Graphiti shut down.")
+
+    async def ensure_embedder_dim(self) -> None:
+        """Verify the embedder's output dimension matches ``EMBEDDER_DIM`` (once).
+
+        A wrong ``EMBEDDER_DIM`` (or a non-embedding model) otherwise degrades
+        search silently — the spec's risk-5 failure mode. We probe lazily on the
+        first ingest rather than at startup so boot does not require the embedder
+        to be reachable (the default Ollama embedder may not be up yet); the
+        mismatch then surfaces as a synchronous error on the first write instead
+        of as empty search results later.
+
+        Raises:
+            ProviderConfigError: if the probe vector's length differs from the
+                configured ``EMBEDDER_DIM``.
+        """
+        if self._embedder_checked:
+            return
+        vector = await self.client.embedder.create("dimension probe")
+        actual = len(vector)
+        if actual != self.settings.embedder_dim:
+            raise ProviderConfigError(
+                f"Embedder '{self.settings.embedder_model}' produced "
+                f"{actual} dimensions but EMBEDDER_DIM={self.settings.embedder_dim}. "
+                f"Set EMBEDDER_DIM={actual} or configure the correct embedding model."
+            )
+        self._embedder_checked = True
 
     async def check_neo4j(self) -> bool:
         """Return True if a trivial Cypher query round-trips."""

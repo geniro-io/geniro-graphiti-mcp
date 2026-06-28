@@ -13,6 +13,8 @@ a LiteLLM/Ollama endpoint. Any OpenAI-compatible endpoint MUST go through
 
 from __future__ import annotations
 
+from graphiti_core.cross_encoder.client import CrossEncoderClient
+from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
 from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
@@ -22,6 +24,12 @@ from .config import EmbedderProvider, LLMProvider, Settings
 
 class ProviderConfigError(ValueError):
     """Raised when provider settings are missing or inconsistent."""
+
+
+# Local OpenAI-compatible gateways (Ollama, LiteLLM, vLLM) often don't check the
+# API key, but the OpenAI SDK refuses to construct a client without one. Send this
+# placeholder so construction succeeds; the gateway ignores it.
+_PLACEHOLDER_API_KEY = "not-needed"
 
 
 def build_llm_client(settings: Settings) -> LLMClient:
@@ -53,9 +61,7 @@ def build_llm_client(settings: Settings) -> LLMClient:
                 "(e.g. http://localhost:11434/v1 for Ollama)."
             )
         config = LLMConfig(
-            # Local gateways often don't check the key; send a placeholder so
-            # the OpenAI SDK doesn't refuse to construct.
-            api_key=settings.openai_api_key or "not-needed",
+            api_key=settings.openai_api_key or _PLACEHOLDER_API_KEY,
             model=settings.llm_model,
             base_url=settings.llm_base_url,
             small_model=settings.llm_small_model,
@@ -83,6 +89,42 @@ def build_llm_client(settings: Settings) -> LLMClient:
         return AnthropicClient(config=config)
 
     raise ProviderConfigError(f"Unsupported LLM_PROVIDER: {provider!r}")
+
+
+class PassthroughCrossEncoder(CrossEncoderClient):
+    """A no-op reranker that preserves the upstream hybrid-search order.
+
+    graphiti's ``Graphiti(...)`` builds an :class:`OpenAIRerankerClient` by
+    default, which needs an OpenAI key even when the LLM/embedder are Anthropic
+    or a local OpenAI-compatible gateway — so a pure-Anthropic deployment would
+    fail at construction. For providers without a usable OpenAI cross-encoder we
+    pass this instead: it keeps the order the BM25+cosine/RRF stage already
+    produced (descending scores) with no external call. Cross-encoder reranking
+    is a quality nicety, not essential, for a local single-user tool.
+    """
+
+    async def rank(self, query: str, passages: list[str]) -> list[tuple[str, float]]:
+        n = len(passages)
+        return [(p, float(n - i)) for i, p in enumerate(passages)]
+
+
+def build_cross_encoder(settings: Settings) -> CrossEncoderClient:
+    """Construct the reranker, matched to the LLM provider.
+
+    - ``openai``         → :class:`OpenAIRerankerClient` (native, real rerank).
+    - ``openai_generic`` → passthrough: local gateways (Ollama/LiteLLM) commonly
+      don't support the reranker's logprob trick.
+    - ``anthropic``      → passthrough: graphiti has no Anthropic reranker, and
+      we must not require an unrelated OpenAI key.
+    """
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAIRerankerClient(
+            config=LLMConfig(
+                api_key=settings.openai_api_key,
+                model=settings.llm_small_model or settings.llm_model,
+            )
+        )
+    return PassthroughCrossEncoder()
 
 
 def build_embedder(settings: Settings) -> EmbedderClient:
@@ -137,7 +179,7 @@ def build_embedder(settings: Settings) -> EmbedderClient:
             )
 
     config = OpenAIEmbedderConfig(
-        api_key=settings.resolved_embedder_api_key or "not-needed",
+        api_key=settings.resolved_embedder_api_key or _PLACEHOLDER_API_KEY,
         embedding_model=settings.embedder_model,
         embedding_dim=settings.embedder_dim,
         base_url=base_url,

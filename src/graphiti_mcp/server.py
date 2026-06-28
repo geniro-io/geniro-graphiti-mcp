@@ -12,6 +12,7 @@ import logging
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
@@ -36,12 +37,16 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
     """Build the engine + indices on startup; close the driver on shutdown."""
     global _engine
     settings = load_settings()
-    _engine = GraphitiEngine(settings)
-    await _engine.initialize()
+    engine = GraphitiEngine(settings)
     try:
+        # initialize() is awaited inside the try so a startup failure (bad creds,
+        # index build error) still triggers shutdown() — closing any driver it
+        # opened — and never leaves a half-built engine in the module global.
+        await engine.initialize()
+        _engine = engine
         yield
     finally:
-        await _engine.shutdown()
+        await engine.shutdown()
         _engine = None
 
 
@@ -63,13 +68,22 @@ mcp = FastMCP(
 async def add_memory(
     name: str,
     episode_body: str,
-    source: str = "message",
+    source: Literal["message", "text", "json"] = "message",
     source_description: str = "",
     group_id: str | None = None,
     reference_time: str | None = None,
     uuid: str | None = None,
 ) -> dict:
     """Add a memory (episode) to the knowledge graph and wait for it to persist.
+
+    Args:
+        name: Short human label for the episode.
+        episode_body: The content; for ``source="json"`` pass a JSON string.
+        source: One of ``"message"`` | ``"text"`` | ``"json"``.
+        source_description: Provenance note (e.g. "user chat").
+        group_id: Memory namespace (workspace); defaults to the configured one.
+        reference_time: ISO-8601 timestamp; defaults to now (UTC).
+        uuid: Optional explicit episode UUID for idempotent re-ingest.
 
     Returns success only after the write completes; on failure returns an error.
     """

@@ -25,6 +25,24 @@ def test_secrets_are_redacted(raw: str) -> None:
         assert leaked not in cleaned
 
 
+@pytest.mark.parametrize(
+    ("raw", "leaked"),
+    [
+        # The dominant JSON/dict error-body shape: quoted key AND quoted value.
+        ('{"openai_api_key": "proxy-LEAKED1234567"}', "proxy-LEAKED1234567"),
+        ("{'api_key': 'LEAKEDvalue'}", "LEAKEDvalue"),
+        ('{"password": "db-LEAKED-pw"}', "db-LEAKED-pw"),
+        ('"authorization": "Bearer LEAKEDtoken"', "LEAKEDtoken"),
+        # A comma-bearing quoted secret must be redacted whole, not truncated.
+        ('{"secret": "a,b,c,LEAKED"}', "a,b,c,LEAKED"),
+    ],
+)
+def test_quoted_keyvalue_secrets_are_redacted(raw: str, leaked: str) -> None:
+    cleaned = redact_secrets(raw)
+    assert "[REDACTED]" in cleaned
+    assert leaked not in cleaned
+
+
 def test_non_secret_text_is_preserved() -> None:
     msg = "Neo4j connection refused at bolt://localhost:7687"
     # No credentials here, so the diagnostic text survives intact.

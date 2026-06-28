@@ -73,8 +73,10 @@ All configuration is via environment variables (or `.env`). See
 |---|---|---|
 | `NEO4J_URI` | `bolt://localhost:7687` | Bolt endpoint |
 | `NEO4J_USER` / `NEO4J_PASSWORD` | `neo4j` / `demodemo` | Match `docker-compose.yml` |
+| `NEO4J_DATABASE` | `neo4j` | Target database |
 | `LLM_PROVIDER` | `openai` | `openai` \| `anthropic` \| `openai_generic` |
 | `LLM_MODEL` | `gpt-5.5` | Extraction model |
+| `LLM_SMALL_MODEL` | — | Optional cheaper model for graphiti's low-stakes calls |
 | `LLM_BASE_URL` | — | Required for `openai_generic` (LiteLLM/Ollama/vLLM) |
 | `EMBEDDER_PROVIDER` | `ollama` | `openai` \| `ollama` \| `voyage` \| `openai_generic` |
 | `EMBEDDER_MODEL` | `qwen3-embedding:8b` | **Must be an embedding model** |
@@ -123,6 +125,10 @@ in the graph.
   (graphiti issue #1116) and would silently hit api.openai.com.
 - **Anthropic / Voyage** need optional extras: `uv pip install '.[anthropic]'`
   or `'.[voyage]'`.
+- **No OpenAI key needed for non-OpenAI providers.** graphiti's default reranker
+  is OpenAI-based; this server only uses it for `LLM_PROVIDER=openai`. Anthropic
+  and OpenAI-compatible gateways fall back to the hybrid-search (RRF) ordering, so
+  a pure-Anthropic or local setup never requires an unrelated `OPENAI_API_KEY`.
 - **Embedding model, not chat model.** `qwen3-embedding:8b` is an embedding model;
   `qwen3:8b` is a chat model and will break search. `EMBEDDER_DIM` must match.
 
@@ -241,7 +247,7 @@ Claude CLI ──stdio──> graphiti-mcp (FastMCP)
                           ├─ config.py     env/.env settings
                           ├─ providers.py  LLM + embedder factories
                           ├─ engine.py     Graphiti(Neo4jDriver, llm, embedder)
-                          ├─ tools/        the 13 MCP tools (await writes)
+                          ├─ tools/        the 14 MCP tools (await writes)
                           └─ models.py     pydantic responses
                                  │
                                  └─ graphiti-core ──Bolt──> Neo4j

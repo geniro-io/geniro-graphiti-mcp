@@ -5,6 +5,8 @@ so ingestion errors propagate to the caller instead of being silently dropped
 by a background queue.
 """
 
+from __future__ import annotations
+
 import os
 
 # Privacy-first default for a local single-user tool: opt out of graphiti-core's

@@ -12,39 +12,36 @@ from __future__ import annotations
 
 import re
 
-# Order matters: more specific patterns first.
-_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # OpenAI / Anthropic-style keys: sk-..., sk-ant-...
-    re.compile(r"sk-[A-Za-z0-9_\-]{6,}"),
-    # Bearer tokens in auth headers.
-    re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+"),
-    # key=value / key: value for sensitive field names.
-    re.compile(
-        r"(?i)\b(api[_-]?key|authorization|access[_-]?token|password|secret|token)\b"
-        r"\s*[=:]\s*[\"']?[^\s\"',)]+"
-    ),
-    # Credentials embedded in a URL (scheme://user:pass@host).
-    re.compile(r"://[^\s:/@]+:[^\s:/@]+@"),
-)
-
 _REDACTED = "[REDACTED]"
+
+# Order matters: more specific patterns first.
+# OpenAI / Anthropic-style keys: sk-..., sk-ant-...
+_SK_PATTERN = re.compile(r"sk-[A-Za-z0-9_\-]{6,}")
+# Bearer tokens in auth headers.
+_BEARER_PATTERN = re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+")
+# Sensitive ``field = value`` / ``field: value`` — INCLUDING the quoted JSON/dict
+# shape (`"api_key": "secret"`) that dominates LLM/HTTP/DB client error bodies.
+# The field name may be a suffix of a compound key (``openai_api_key``) and may be
+# quote-wrapped; the value may be quoted (captured through commas, so a comma-
+# bearing secret is fully scrubbed) or bare.
+_KV_PATTERN = re.compile(
+    r"(?i)"
+    r"(['\"]?[\w.\-]*(?:api[_-]?key|authorization|access[_-]?token|password|secret|token)[\w.\-]*['\"]?)"
+    r"(\s*[=:]\s*)"
+    r"""(\"[^\"]*\"|'[^']*'|[^\s,)]+)"""
+)
+# Credentials embedded in a URL (scheme://user:pass@host).
+_URL_CRED_PATTERN = re.compile(r"://[^\s:/@]+:[^\s:/@]+@")
 
 
 def redact_secrets(text: str) -> str:
     """Replace secret-looking substrings in ``text`` with ``[REDACTED]``."""
-    text = _SECRET_PATTERNS[0].sub(_REDACTED, text)
-    text = _SECRET_PATTERNS[1].sub(_REDACTED, text)
-    # For key=value, keep the field name, redact only the value.
-    text = _SECRET_PATTERNS[2].sub(lambda m: _redact_kv(m.group(0)), text)
-    text = _SECRET_PATTERNS[3].sub("://" + _REDACTED + "@", text)
+    text = _SK_PATTERN.sub(_REDACTED, text)
+    text = _BEARER_PATTERN.sub(_REDACTED, text)
+    # Keep the field name + separator, redact the whole (possibly quoted) value.
+    text = _KV_PATTERN.sub(lambda m: f"{m.group(1)}{m.group(2)}{_REDACTED}", text)
+    text = _URL_CRED_PATTERN.sub("://" + _REDACTED + "@", text)
     return text
-
-
-def _redact_kv(match: str) -> str:
-    # Split on the first = or : and redact the value side only.
-    separator = "=" if "=" in match else ":"
-    key, _, _value = match.partition(separator)
-    return f"{key}{separator}{_REDACTED}"
 
 
 def safe_error(exc: BaseException) -> str:

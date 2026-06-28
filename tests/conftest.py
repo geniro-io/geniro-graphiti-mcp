@@ -40,4 +40,7 @@ def engine(settings: Settings, mock_client: AsyncMock) -> GraphitiEngine:
     """A GraphitiEngine whose Graphiti client is mocked (no Neo4j needed)."""
     eng = GraphitiEngine(settings)
     eng._graphiti = mock_client  # type: ignore[attr-defined]
+    # Skip the lazy embedder-dim probe by default — tests that exercise it set
+    # this back to False and stub `mock_client.embedder.create`.
+    eng._embedder_checked = True  # type: ignore[attr-defined]
     return eng

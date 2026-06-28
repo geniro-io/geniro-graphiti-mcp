@@ -74,8 +74,14 @@ async def add_memory(
             return ErrorResponse(
                 error=f"reference_time {reference_time!r} is not valid ISO-8601."
             )
+        # A bare ISO string ("2024-01-01T00:00:00") parses to a naive datetime;
+        # normalize to aware UTC so it can't collide with the tz-aware default
+        # (and graphiti's tz-aware temporal comparisons).
+        if ref_time.tzinfo is None:
+            ref_time = ref_time.replace(tzinfo=timezone.utc)
 
     try:
+        await engine.ensure_embedder_dim()
         result = await engine.client.add_episode(
             name=name,
             episode_body=episode_body,
@@ -113,18 +119,18 @@ async def add_triplet(
     gid = _resolve_group_id(engine, group_id)
     now = datetime.now(timezone.utc)
 
-    source_node = EntityNode(name=source_name, group_id=gid, labels=["Entity"])
-    target_node = EntityNode(name=target_name, group_id=gid, labels=["Entity"])
-    edge = EntityEdge(
-        source_node_uuid=source_node.uuid,
-        target_node_uuid=target_node.uuid,
-        name=edge_name,
-        fact=fact,
-        group_id=gid,
-        created_at=now,
-    )
-
     try:
+        await engine.ensure_embedder_dim()
+        source_node = EntityNode(name=source_name, group_id=gid, labels=["Entity"])
+        target_node = EntityNode(name=target_name, group_id=gid, labels=["Entity"])
+        edge = EntityEdge(
+            source_node_uuid=source_node.uuid,
+            target_node_uuid=target_node.uuid,
+            name=edge_name,
+            fact=fact,
+            group_id=gid,
+            created_at=now,
+        )
         await engine.client.add_triplet(source_node, edge, target_node)
     except Exception as exc:  # noqa: BLE001
         logger.exception("add_triplet failed: %s -[%s]-> %s", source_name, edge_name, target_name)

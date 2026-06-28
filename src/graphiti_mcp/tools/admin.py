@@ -1,5 +1,8 @@
-"""Administrative tools: ``build_communities``, ``summarize_saga``,
-``clear_graph`` and ``get_status``."""
+"""Administrative tools.
+
+``build_communities``, ``summarize_saga``, ``clear_graph`` (group-scoped,
+destructive) and ``get_status`` (connectivity + resolved providers).
+"""
 
 from __future__ import annotations
 
@@ -89,7 +92,10 @@ async def get_status(engine: GraphitiEngine) -> StatusResponse:
         embedder_provider=s.embedder_provider.value,
         embedder_model=s.embedder_model,
         embedder_dim=s.embedder_dim,
-        workspace=s.default_group_id,
+        # Report the truthful configured workspace ("" when none was set), and the
+        # effective namespace separately — don't imply a workspace was configured
+        # when only GRAPHITI_GROUP_ID is set.
+        workspace=s.workspace or "",
         group_id=s.default_group_id,
         message=(
             "Neo4j reachable; providers resolved."

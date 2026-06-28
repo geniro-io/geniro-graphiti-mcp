@@ -15,9 +15,11 @@ from ..models import ErrorResponse, GroupIdListResponse
 
 logger = logging.getLogger(__name__)
 
-# Distinct group_ids across both nodes and relationships.
+# Distinct group_ids across both nodes and relationships. The node arm is
+# label-restricted to graphiti's own node labels so it is not an unbounded
+# AllNodesScan — only Entity/Episodic/Community nodes carry a group_id.
 _LIST_GROUP_IDS_QUERY = (
-    "MATCH (n) WHERE n.group_id IS NOT NULL "
+    "MATCH (n:Entity|Episodic|Community) WHERE n.group_id IS NOT NULL "
     "RETURN DISTINCT n.group_id AS group_id "
     "UNION "
     "MATCH ()-[r]-() WHERE r.group_id IS NOT NULL "
