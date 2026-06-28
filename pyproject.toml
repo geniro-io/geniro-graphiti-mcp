@@ -29,6 +29,9 @@ voyage = ["graphiti-core[voyage]>=0.29.2,<0.30"]
 
 [project.scripts]
 graphiti-mcp = "graphiti_mcp.server:main"
+# Alias matching the distribution name, so `uvx geniro-graphiti-mcp@latest`
+# resolves a command without needing `--from`.
+geniro-graphiti-mcp = "graphiti_mcp.server:main"
 
 [dependency-groups]
 dev = [
