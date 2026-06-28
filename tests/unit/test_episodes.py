@@ -7,11 +7,17 @@ These tests encode the entire reason this rewrite exists — there is no queue, 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from graphiti_mcp.models import ErrorResponse, SuccessResponse
+from graphiti_mcp.models import (
+    BulkAddResponse,
+    EpisodeInput,
+    ErrorResponse,
+    SuccessResponse,
+)
 from graphiti_mcp.tools import episodes
 
 
@@ -180,6 +186,59 @@ async def test_add_triplet_propagates_failure(engine, mock_client) -> None:
     )
     assert isinstance(result, ErrorResponse)
     assert "embed failed" in result.error
+
+
+# ── bulk ──────────────────────────────────────────────────────────────────
+
+
+async def test_add_memory_bulk_success_reports_counts(engine, mock_client) -> None:
+    mock_client.add_episode_bulk.return_value = SimpleNamespace(
+        episodes=[1, 2], nodes=[1, 2, 3], edges=[1]
+    )
+    eps = [
+        EpisodeInput(name="a", episode_body="Alice joined Acme."),
+        EpisodeInput(name="b", episode_body="Bob joined Acme.", source="text"),
+    ]
+    result = await episodes.add_memory_bulk(engine, eps)
+    assert isinstance(result, BulkAddResponse)
+    assert (result.episodes_added, result.nodes_created, result.edges_created) == (2, 3, 1)
+    # Forwarded a 2-item RawEpisode list under the default group.
+    args = mock_client.add_episode_bulk.await_args
+    assert len(args.args[0]) == 2
+    assert args.kwargs["group_id"] == "main"
+
+
+async def test_add_memory_bulk_empty_rejected_without_calling_engine(engine, mock_client) -> None:
+    result = await episodes.add_memory_bulk(engine, [])
+    assert isinstance(result, ErrorResponse)
+    mock_client.add_episode_bulk.assert_not_called()
+
+
+async def test_add_memory_bulk_invalid_item_rejects_whole_batch(engine, mock_client) -> None:
+    eps = [
+        EpisodeInput(name="ok", episode_body="x"),
+        EpisodeInput(name="bad", episode_body="y", reference_time="not-a-date"),
+    ]
+    result = await episodes.add_memory_bulk(engine, eps)
+    assert isinstance(result, ErrorResponse)
+    assert "ISO-8601" in result.error
+    # One bad item rejects the call before any write.
+    mock_client.add_episode_bulk.assert_not_called()
+
+
+async def test_add_memory_bulk_uses_explicit_group_id(engine, mock_client) -> None:
+    mock_client.add_episode_bulk.return_value = SimpleNamespace(episodes=[], nodes=[], edges=[])
+    await episodes.add_memory_bulk(
+        engine, [EpisodeInput(name="a", episode_body="x")], group_id="proj"
+    )
+    assert mock_client.add_episode_bulk.await_args.kwargs["group_id"] == "proj"
+
+
+async def test_add_memory_bulk_propagates_failure(engine, mock_client) -> None:
+    mock_client.add_episode_bulk.side_effect = RuntimeError("bulk neo4j down")
+    result = await episodes.add_memory_bulk(engine, [EpisodeInput(name="a", episode_body="x")])
+    assert isinstance(result, ErrorResponse)
+    assert "bulk neo4j down" in result.error
 
 
 async def test_add_memory_error_redacts_secrets(engine, mock_client) -> None:

@@ -84,8 +84,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("workspace", "GRAPHITI_WORKSPACE"),
     )
     graphiti_group_id: str = Field(default="main")
-    # Concurrency cap for graphiti-core's internal coroutines.
-    semaphore_limit: int = 10
+    # Concurrency cap for graphiti-core's internal coroutines (bounds concurrent
+    # LLM/DB calls within an ingest — higher = faster, until provider rate limits).
+    semaphore_limit: int = 15
 
     @property
     def default_group_id(self) -> str:

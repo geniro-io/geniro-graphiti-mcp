@@ -18,6 +18,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import load_settings
 from .engine import EngineNotInitializedError, GraphitiEngine
+from .models import EpisodeInput
 from .tools import admin, episodes, graph, groups, search
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,22 @@ async def add_memory(
         reference_time=reference_time,
         uuid=uuid,
     )
+    return result.model_dump()
+
+
+@mcp.tool()
+async def add_memory_bulk(
+    episodes: list[EpisodeInput],
+    group_id: str | None = None,
+) -> dict:
+    """Add many memories (episodes) in one batched, awaited operation.
+
+    Faster than calling add_memory repeatedly (the batch is extracted, embedded
+    and deduplicated together); still synchronous, so failures are reported, not
+    dropped. Each item: name, episode_body, and optional source
+    ("message"|"text"|"json"), source_description, reference_time (ISO-8601), uuid.
+    """
+    result = await episodes.add_memory_bulk(get_engine(), episodes, group_id=group_id)
     return result.model_dump()
 
 

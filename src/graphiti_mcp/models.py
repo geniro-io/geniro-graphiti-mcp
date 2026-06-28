@@ -8,15 +8,36 @@ a failed write returns an ``ErrorResponse`` synchronously, never a success.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+
+class EpisodeInput(BaseModel):
+    """One episode in an :func:`add_memory_bulk` request."""
+
+    name: str
+    episode_body: str
+    source: Literal["message", "text", "json"] = "message"
+    source_description: str = ""
+    reference_time: str | None = None
+    uuid: str | None = None
 
 
 class SuccessResponse(BaseModel):
     """Returned by a tool whose side effect completed successfully."""
 
     status: str = "success"
+    message: str
+
+
+class BulkAddResponse(BaseModel):
+    """Returned by :func:`add_memory_bulk` — counts of what the batch created."""
+
+    status: str = "success"
+    episodes_added: int
+    nodes_created: int
+    edges_created: int
     message: str
 
 

@@ -14,10 +14,11 @@ from datetime import datetime, timezone
 
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EntityNode, EpisodeType
+from graphiti_core.utils.bulk_utils import RawEpisode
 
 from ..engine import GraphitiEngine
 from ..errors import safe_error
-from ..models import ErrorResponse, SuccessResponse
+from ..models import BulkAddResponse, EpisodeInput, ErrorResponse, SuccessResponse
 from ._common import resolve_group_id
 
 logger = logging.getLogger(__name__)
@@ -135,4 +136,79 @@ async def add_triplet(
 
     return SuccessResponse(
         message=f"Added triplet: {source_name} -[{edge_name}]-> {target_name}"
+    )
+
+
+def _to_raw_episode(ep: EpisodeInput) -> RawEpisode | str:
+    """Convert an :class:`EpisodeInput` to a graphiti ``RawEpisode``.
+
+    Returns the ``RawEpisode`` on success, or an error string describing the
+    first problem (invalid source / non-ISO reference_time).
+    """
+    episode_type = _EPISODE_TYPES.get(ep.source.lower())
+    if episode_type is None:
+        return f"episode {ep.name!r}: invalid source {ep.source!r}"
+
+    if ep.reference_time is None:
+        ref_time = datetime.now(timezone.utc)
+    else:
+        try:
+            ref_time = datetime.fromisoformat(ep.reference_time)
+        except ValueError:
+            return f"episode {ep.name!r}: reference_time {ep.reference_time!r} is not valid ISO-8601"
+        if ref_time.tzinfo is None:
+            ref_time = ref_time.replace(tzinfo=timezone.utc)
+
+    return RawEpisode(
+        name=ep.name,
+        content=ep.episode_body,
+        source=episode_type,
+        source_description=ep.source_description,
+        reference_time=ref_time,
+        uuid=ep.uuid,
+    )
+
+
+async def add_memory_bulk(
+    engine: GraphitiEngine,
+    episodes: list[EpisodeInput],
+    *,
+    group_id: str | None = None,
+) -> BulkAddResponse | ErrorResponse:
+    """Ingest many episodes in one batched, AWAITED operation.
+
+    Faster than calling :func:`add_memory` N times — graphiti extracts, embeds
+    and deduplicates the whole batch together (with the same edge-invalidation as
+    the single path). Still synchronous: a failure becomes an
+    :class:`ErrorResponse`, never a silent drop. The batch is validated up front,
+    so one bad item rejects the call before any write.
+
+    Args:
+        episodes: The episodes to ingest. Keep batches modest (chunk very large
+            loads) to stay within provider rate limits.
+        group_id: Memory namespace; defaults to the configured workspace.
+    """
+    if not episodes:
+        return ErrorResponse(error="No episodes provided for bulk add.")
+
+    raw_episodes: list[RawEpisode] = []
+    for ep in episodes:
+        converted = _to_raw_episode(ep)
+        if isinstance(converted, str):
+            return ErrorResponse(error=f"Invalid bulk episode — {converted}.")
+        raw_episodes.append(converted)
+
+    gid = resolve_group_id(engine, group_id)
+    try:
+        await engine.ensure_embedder_dim()
+        result = await engine.client.add_episode_bulk(raw_episodes, group_id=gid)
+    except Exception as exc:  # noqa: BLE001 - surface every failure to the caller
+        logger.exception("add_memory_bulk failed for %d episodes", len(raw_episodes))
+        return ErrorResponse(error=f"Failed to add memories in bulk: {safe_error(exc)}")
+
+    return BulkAddResponse(
+        episodes_added=len(getattr(result, "episodes", []) or []),
+        nodes_created=len(getattr(result, "nodes", []) or []),
+        edges_created=len(getattr(result, "edges", []) or []),
+        message=f"Added {len(raw_episodes)} episodes in bulk to group {gid!r}.",
     )

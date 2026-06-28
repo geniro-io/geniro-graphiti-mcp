@@ -137,6 +137,7 @@ in the graph.
 | Tool | Purpose |
 |---|---|
 | `add_memory` | Ingest an episode (synchronous, awaited). |
+| `add_memory_bulk` | Ingest many episodes in one batched, awaited call (faster than N× `add_memory`). |
 | `add_triplet` | Add an explicit (source)-[edge]->(target) fact. |
 | `search_memory_facts` | Search relationships (facts). |
 | `search_nodes` | Search entity nodes. |
@@ -193,14 +194,15 @@ Claude CLI — so the trade-offs differ deliberately.
 | `summarize_saga` | ✅ | ✅ | ❌ |
 | `get_status` | ✅ (connectivity + providers) | ✅ | ❌ (status resource) |
 | `list_group_ids` | ✅ | ❌ | ✅ |
+| `add_memory_bulk` | ✅ (awaited batch) | ❌ | ❌ |
 | `delete_everything_by_group_id` | ➖ (use `clear_graph`) | ❌ | ✅ |
 | `get_queue_status` | ➖ N/A — no queue | ❌ | ✅ |
 
 We carry the **full upstream tool surface** (using upstream's canonical names) and
-add `list_group_ids`. The fork dropped five upstream tools and added three of its
-own; two of those three (`delete_everything_by_group_id`, `get_queue_status`) are
-either already covered here (`clear_graph` is group-scoped) or meaningless without
-a queue.
+add `list_group_ids` plus `add_memory_bulk` (an awaited batch ingest). The fork
+dropped five upstream tools and added three of its own; two of those three
+(`delete_everything_by_group_id`, `get_queue_status`) are either already covered
+here (`clear_graph` is group-scoped) or meaningless without a queue.
 
 ### Capabilities this server has that the fork does not
 
@@ -247,7 +249,7 @@ Claude CLI ──stdio──> graphiti-mcp (FastMCP)
                           ├─ config.py     env/.env settings
                           ├─ providers.py  LLM + embedder factories
                           ├─ engine.py     Graphiti(Neo4jDriver, llm, embedder)
-                          ├─ tools/        the 14 MCP tools (await writes)
+                          ├─ tools/        the 15 MCP tools (await writes)
                           └─ models.py     pydantic responses
                                  │
                                  └─ graphiti-core ──Bolt──> Neo4j
