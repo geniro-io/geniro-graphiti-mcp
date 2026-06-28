@@ -39,6 +39,17 @@ async def test_add_memory_propagates_failure_as_error_not_success(engine, mock_c
     assert not isinstance(result, SuccessResponse)
 
 
+async def test_add_memory_success_message_without_episode_uuid(engine, mock_client) -> None:
+    # When the result carries no episode uuid, the message omits the suffix
+    # rather than erroring.
+    from types import SimpleNamespace
+
+    mock_client.add_episode.return_value = SimpleNamespace(episode=None)
+    result = await episodes.add_memory(engine, name="n", episode_body="b")
+    assert isinstance(result, SuccessResponse)
+    assert result.message == "Added memory 'n'"
+
+
 async def test_add_memory_awaits_the_write(engine, mock_client) -> None:
     # The write must actually be awaited (not enqueued-and-forgotten).
     mock_client.add_episode.return_value = Mock(episode=Mock(uuid="ep-1"))

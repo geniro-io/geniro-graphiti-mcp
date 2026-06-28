@@ -50,6 +50,14 @@ def test_default_group_id_default_is_main() -> None:
     assert s.default_group_id == "main"
 
 
+def test_workspace_wins_over_group_id_both_from_env(monkeypatch) -> None:
+    # Both set in the environment → workspace wins (the documented precedence).
+    monkeypatch.setenv("GRAPHITI_WORKSPACE", "w")
+    monkeypatch.setenv("GRAPHITI_GROUP_ID", "g")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.default_group_id == "w"
+
+
 def test_embedder_api_key_falls_back_to_openai_key() -> None:
     s = Settings(openai_api_key="sk-main", embedder_api_key=None, _env_file=None)  # type: ignore[call-arg]
     assert s.resolved_embedder_api_key == "sk-main"

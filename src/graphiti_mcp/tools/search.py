@@ -21,12 +21,9 @@ from ..models import (
     format_fact,
     format_node,
 )
+from ._common import resolve_group_ids
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_group_ids(engine: GraphitiEngine, group_id: str | None) -> list[str]:
-    return [group_id or engine.settings.default_group_id]
 
 
 async def search_memory_facts(
@@ -42,7 +39,7 @@ async def search_memory_facts(
     try:
         edges = await engine.client.search(
             query=query,
-            group_ids=_resolve_group_ids(engine, group_id),
+            group_ids=resolve_group_ids(engine, group_id),
             num_results=max_facts,
         )
     except Exception as exc:  # noqa: BLE001
@@ -70,7 +67,7 @@ async def search_nodes(
         results = await engine.client.search_(
             query=query,
             config=config,
-            group_ids=_resolve_group_ids(engine, group_id),
+            group_ids=resolve_group_ids(engine, group_id),
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("search_nodes failed for query %r", query)

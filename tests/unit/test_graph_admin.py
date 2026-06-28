@@ -225,3 +225,13 @@ def test_engine_client_raises_before_initialize(settings) -> None:
     eng = GraphitiEngine(settings)
     with pytest.raises(EngineNotInitializedError):
         _ = eng.client
+
+
+async def test_check_neo4j_true_on_success(engine, mock_client) -> None:
+    mock_client.driver.execute_query = AsyncMock(return_value=None)
+    assert await engine.check_neo4j() is True
+
+
+async def test_check_neo4j_false_on_error(engine, mock_client) -> None:
+    mock_client.driver.execute_query = AsyncMock(side_effect=OSError("refused"))
+    assert await engine.check_neo4j() is False

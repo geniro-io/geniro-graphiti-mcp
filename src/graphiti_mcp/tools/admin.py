@@ -13,12 +13,9 @@ from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from ..engine import GraphitiEngine
 from ..errors import safe_error
 from ..models import ErrorResponse, StatusResponse, SuccessResponse
+from ._common import resolve_group_id
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_group_id(engine: GraphitiEngine, group_id: str | None) -> str:
-    return group_id or engine.settings.default_group_id
 
 
 async def build_communities(
@@ -29,7 +26,7 @@ async def build_communities(
     """(Re)build community clusters for a group."""
     try:
         communities, _edges = await engine.client.build_communities(
-            group_ids=[_resolve_group_id(engine, group_id)]
+            group_ids=[resolve_group_id(engine, group_id)]
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("build_communities failed")
@@ -63,7 +60,7 @@ async def clear_graph(
     Scoped to ``group_id`` (defaults to the server's group) so it never wipes
     other namespaces, and only runs when explicitly invoked.
     """
-    gid = _resolve_group_id(engine, group_id)
+    gid = resolve_group_id(engine, group_id)
     try:
         await clear_data(engine.driver, group_ids=[gid])
         # clear_data drops data, not schema; rebuild indices to be safe.

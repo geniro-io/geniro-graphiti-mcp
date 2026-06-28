@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from graphiti_core import Graphiti
+from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 
 from .config import Settings
@@ -47,8 +48,13 @@ class GraphitiEngine:
         return self._graphiti
 
     @property
-    def driver(self):  # noqa: ANN201 - graphiti's GraphDriver type
-        """The underlying graph driver (for direct node/edge lookups)."""
+    def driver(self) -> GraphDriver:
+        """The underlying graph driver (for direct node/edge lookups).
+
+        Couples the caller to the concrete backend's return contract (e.g.
+        Neo4j's ``EagerResult`` tuple), so use it only where graphiti's client
+        API has no equivalent (raw Cypher in ``groups``, edge classmethods).
+        """
         return self.client.driver
 
     async def initialize(self) -> None:

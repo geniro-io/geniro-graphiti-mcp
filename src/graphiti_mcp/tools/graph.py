@@ -25,12 +25,9 @@ from ..models import (
     format_fact,
     format_node,
 )
+from ._common import resolve_group_ids
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_group_ids(engine: GraphitiEngine, group_id: str | None) -> list[str]:
-    return [group_id or engine.settings.default_group_id]
 
 
 async def get_episodes(
@@ -46,7 +43,7 @@ async def get_episodes(
         episodes = await engine.client.retrieve_episodes(
             reference_time=datetime.now(timezone.utc),
             last_n=last_n,
-            group_ids=_resolve_group_ids(engine, group_id),
+            group_ids=resolve_group_ids(engine, group_id),
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("get_episodes failed")

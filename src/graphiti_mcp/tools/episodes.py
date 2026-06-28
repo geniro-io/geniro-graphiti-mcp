@@ -18,6 +18,7 @@ from graphiti_core.nodes import EntityNode, EpisodeType
 from ..engine import GraphitiEngine
 from ..errors import safe_error
 from ..models import ErrorResponse, SuccessResponse
+from ._common import resolve_group_id
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,6 @@ _EPISODE_TYPES = {
     "text": EpisodeType.text,
     "json": EpisodeType.json,
 }
-
-
-def _resolve_group_id(engine: GraphitiEngine, group_id: str | None) -> str:
-    return group_id or engine.settings.default_group_id
 
 
 async def add_memory(
@@ -88,7 +85,7 @@ async def add_memory(
             source_description=source_description,
             reference_time=ref_time,
             source=episode_type,
-            group_id=_resolve_group_id(engine, group_id),
+            group_id=resolve_group_id(engine, group_id),
             uuid=uuid,
         )
     except Exception as exc:  # noqa: BLE001 - surface every failure to the caller
@@ -116,7 +113,7 @@ async def add_triplet(
     Builds the two entity nodes and the relationship edge, then awaits
     ``graphiti.add_triplet`` (which embeds and persists them).
     """
-    gid = _resolve_group_id(engine, group_id)
+    gid = resolve_group_id(engine, group_id)
     now = datetime.now(timezone.utc)
 
     try:
