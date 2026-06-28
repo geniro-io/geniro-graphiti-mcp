@@ -51,14 +51,42 @@ uv run graphiti-mcp          # or just: graphiti-mcp
 
 ### Register with the Claude CLI
 
+**Recommended — auto-updating install from PyPI.** Once the package is published
+(see [Releasing & auto-update](#releasing--auto-update)), register it via `uvx` so
+every Claude session launches the latest published version:
+
 ```bash
-claude mcp add graphiti-mcp -- graphiti-mcp
+claude mcp add graphiti -- uvx --refresh geniro-graphiti-mcp@latest
 ```
 
-If you installed into a virtualenv, point Claude at the resolved binary, e.g.:
+`uvx … @latest` resolves the newest release on each start; `--refresh` bypasses
+uv's cache so a version published moments ago is picked up immediately. Drop
+`--refresh` if you prefer a faster startup and are happy for updates to land within
+uv's normal cache window instead of on the very next launch.
+
+Configuration comes from environment variables (there is no repo-local `.env`
+alongside a `uvx` install). Pass them inline — this is also how you scope a
+[workspace](#workspaces--memory-per-project) per project:
 
 ```bash
-claude mcp add graphiti-mcp -- uv run --directory /path/to/geniro-graphiti-mcp graphiti-mcp
+claude mcp add graphiti -- env \
+  NEO4J_URI=bolt://localhost:7687 NEO4J_PASSWORD=demodemo \
+  OPENAI_API_KEY=sk-… GRAPHITI_WORKSPACE=my-project \
+  uvx --refresh geniro-graphiti-mcp@latest
+```
+
+For the Anthropic or Voyage extras, install from the extra-qualified spec:
+
+```bash
+claude mcp add graphiti -- uvx --refresh \
+  --from 'geniro-graphiti-mcp[anthropic]@latest' geniro-graphiti-mcp
+```
+
+**Local development checkout.** When hacking on the server itself, point Claude at
+your working tree so it runs your uncommitted code instead of a published release:
+
+```bash
+claude mcp add graphiti -- uv run --directory /path/to/geniro-graphiti-mcp graphiti-mcp
 ```
 
 Then, from Claude: call `add_memory`, then `search_memory_facts`, and confirm the
@@ -98,11 +126,11 @@ ever reads and writes its own memory, with no chance of cross-contamination:
 ```bash
 # In project A's repo:
 claude mcp add graphiti -- env GRAPHITI_WORKSPACE=project-a \
-  uv run --directory /path/to/geniro-graphiti-mcp graphiti-mcp
+  uvx --refresh geniro-graphiti-mcp@latest
 
 # In project B's repo:
 claude mcp add graphiti -- env GRAPHITI_WORKSPACE=project-b \
-  uv run --directory /path/to/geniro-graphiti-mcp graphiti-mcp
+  uvx --refresh geniro-graphiti-mcp@latest
 ```
 
 Everything (ingest, search, communities, `clear_graph`) is then scoped to that
@@ -257,6 +285,39 @@ Claude CLI ──stdio──> graphiti-mcp (FastMCP)
 
 The engine is embedded directly (architecture A) — no separate Graphiti REST
 service, no network hop, no async-202 durability bug.
+
+## Releasing & auto-update
+
+New versions reach every `uvx … @latest` registration automatically. The pipeline:
+
+1. **Bump the version** in `pyproject.toml` (`version = "X.Y.Z"`).
+2. **Merge to `main`.** On every push to `main`, [`.github/workflows/release.yml`](.github/workflows/release.yml)
+   reads that version and checks PyPI. If the exact version is not published yet, it
+   runs the unit tests, builds the wheel + sdist, and publishes to PyPI via **trusted
+   publishing** (OIDC — no API token is stored in the repo). If the version is
+   unchanged (already on PyPI), the job is a no-op, so unrelated pushes never publish.
+3. **Clients update on next launch.** Because registrations use
+   `geniro-graphiti-mcp@latest`, the next time Claude starts the server it resolves
+   and runs the new release (immediately with `--refresh`, otherwise within uv's
+   cache window).
+
+### One-time PyPI setup (required before the first publish)
+
+Trusted publishing must be authorized once on PyPI, or the publish step fails:
+
+1. Sign in at <https://pypi.org> → **Your projects → Publishing**, or
+   **Account → Publishing → Add a pending publisher** if the project does not exist
+   on PyPI yet.
+2. Register a **GitHub** trusted publisher with:
+   - **PyPI project name:** `geniro-graphiti-mcp`
+   - **Owner:** `geniro-io`
+   - **Repository:** `geniro-graphiti-mcp`
+   - **Workflow filename:** `release.yml`
+   - **Environment:** *(leave blank)*
+3. Merge a version bump to `main` (the initial `0.1.0` counts) and watch the
+   **Release** workflow publish it.
+
+No PyPI token is ever stored — GitHub's OIDC identity authorizes each publish.
 
 ## License
 

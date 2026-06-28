@@ -1,0 +1,83 @@
+name: Release
+
+# Auto-publish to PyPI on a version bump. Every push to main reads the version in
+# pyproject.toml and checks PyPI; it publishes only when that exact version is not
+# already there. So merging a version bump ships it, and any other push is a no-op.
+# Clients registered with `uvx geniro-graphiti-mcp@latest` then pick it up on their
+# next start — that is the "automatic update on a new version push" behaviour.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two publishes concurrently (a re-run while one is in flight would race
+# the duplicate-version check). Don't cancel an in-flight publish.
+concurrency:
+  group: release-pypi
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish to PyPI on version bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for PyPI trusted publishing (OIDC); no token stored
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve package version
+        id: ver
+        run: |
+          version="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Package version in pyproject.toml: ${version}"
+
+      - name: Check whether this version is already on PyPI
+        id: check
+        run: |
+          pkg="geniro-graphiti-mcp"
+          version="${{ steps.ver.outputs.version }}"
+          status="$(curl -sS -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/${pkg}/${version}/json")"
+          if [ "$status" = "200" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${pkg} ${version} is already on PyPI — nothing to publish."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${pkg} ${version} is new (HTTP ${status}) — will test, build and publish."
+          fi
+
+      - name: Install dependencies
+        if: steps.check.outputs.publish == 'true'
+        run: uv sync
+
+      - name: Unit tests (gate the release)
+        if: steps.check.outputs.publish == 'true'
+        run: uv run pytest tests/unit -q
+
+      - name: Build sdist + wheel
+        if: steps.check.outputs.publish == 'true'
+        run: uv build
+
+      - name: Publish to PyPI (trusted publishing)
+        if: steps.check.outputs.publish == 'true'
+        run: uv publish --trusted-publishing always
+
+      - name: Summary
+        if: always()
+        run: |
+          version="${{ steps.ver.outputs.version }}"
+          if [ "${{ steps.check.outputs.publish }}" = "true" ]; then
+            echo "Published **geniro-graphiti-mcp ${version}** to PyPI." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No publish: **geniro-graphiti-mcp ${version}** is already on PyPI." >> "$GITHUB_STEP_SUMMARY"
+          fi
