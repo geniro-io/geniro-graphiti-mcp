@@ -11,8 +11,7 @@ dist/
 .venv-*/
 venv/
 
-# uv
-uv.lock
+# uv: uv.lock IS tracked (committed) for reproducible server deployments.
 
 # Environment / secrets — NEVER commit real credentials
 .env

@@ -84,6 +84,13 @@ class EpisodeListResponse(BaseModel):
     episodes: list[EpisodeResult]
 
 
+class GroupIdListResponse(BaseModel):
+    """The distinct group_ids (memory namespaces) present in the graph."""
+
+    status: str = "success"
+    group_ids: list[str]
+
+
 class StatusResponse(BaseModel):
     """Health/diagnostics for :func:`get_status` — reports connectivity and the
     resolved providers, NOT queue depth (there is no queue)."""

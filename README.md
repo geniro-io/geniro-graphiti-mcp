@@ -109,6 +109,7 @@ All configuration is via environment variables (or `.env`). See
 | `get_entity_edge` | Fetch one edge by UUID. |
 | `delete_entity_edge` | Delete an edge by UUID. |
 | `delete_episode` | Delete an episode by UUID. |
+| `list_group_ids` | List the memory namespaces (group_ids) present in the graph. |
 | `build_communities` | (Re)build community clusters. |
 | `summarize_saga` | Summarize a thread of episodes. |
 | `clear_graph` | Delete all data for one group (destructive, group-scoped). |
@@ -130,6 +131,77 @@ uv run pytest -q
 
 The unit suite includes the core guarantee: when a write fails, `add_memory`
 returns an **error** synchronously — never a false success.
+
+## How this compares
+
+There are two other Graphiti MCP servers worth comparing against: the **upstream**
+`getzep/graphiti` `mcp_server`, and the popular community fork
+[`michabbb/graphiti-mcp-but-working`](https://github.com/michabbb/graphiti-mcp-but-working)
+(an "enhanced fork" aimed at secure *public, multi-tenant* deployment). This
+server targets a different use case — a **local, single-user** memory for the
+Claude CLI — so the trade-offs differ deliberately.
+
+### Tool surface
+
+| Tool | This server | Upstream | michabbb fork |
+|---|:---:|:---:|:---:|
+| `add_memory` | ✅ (awaited) | ✅ (queued) | ✅ (queued) |
+| `search_nodes` | ✅ | ✅ | ✅ (as `search_memory_nodes`) |
+| `search_memory_facts` | ✅ | ✅ | ✅ |
+| `get_episodes` / `delete_episode` | ✅ | ✅ | ✅ |
+| `get_entity_edge` / `delete_entity_edge` | ✅ | ✅ | ✅ |
+| `clear_graph` | ✅ (group-scoped) | ✅ | ✅ (password-gated) |
+| `add_triplet` | ✅ | ✅ | ❌ |
+| `get_episode_entities` | ✅ | ✅ | ❌ |
+| `build_communities` | ✅ | ✅ | ❌ |
+| `summarize_saga` | ✅ | ✅ | ❌ |
+| `get_status` | ✅ (connectivity + providers) | ✅ | ❌ (status resource) |
+| `list_group_ids` | ✅ | ❌ | ✅ |
+| `delete_everything_by_group_id` | ➖ (use `clear_graph`) | ❌ | ✅ |
+| `get_queue_status` | ➖ N/A — no queue | ❌ | ✅ |
+
+We carry the **full upstream tool surface** (using upstream's canonical names) and
+add `list_group_ids`. The fork dropped five upstream tools and added three of its
+own; two of those three (`delete_everything_by_group_id`, `get_queue_status`) are
+either already covered here (`clear_graph` is group-scoped) or meaningless without
+a queue.
+
+### Capabilities this server has that the fork does not
+
+- **Synchronous, awaited writes — no silent drops.** `add_memory` reports the real
+  result. The fork keeps a queue (Redis-backed), and its worker still drops on a
+  processing error (`fail(requeue=False)`, no dead-letter) — the same bug class
+  this rewrite was built to eliminate.
+- **A real test suite.** Upstream and the fork ship **zero** tests; this server has
+  60+ unit tests (including the no-silent-drop guarantee) plus a testcontainers
+  integration round-trip.
+- **Multiple LLM providers** — OpenAI, Anthropic, and any OpenAI-compatible endpoint
+  (LiteLLM / Ollama / vLLM). The fork is OpenAI-only (Azure was removed).
+- **Multiple embedders** — OpenAI / Ollama / Voyage, with a validated local default.
+- **The `base_url` fix (#1116)** — `OpenAIGenericClient` for compatible endpoints, so
+  Ollama/LiteLLM actually work. (The fork is OpenAI-direct, so it sidesteps rather
+  than fixes this.)
+- **Secret redaction** in error messages returned to the client.
+- **Newer graphiti-core (0.29.2)**, which handles gpt-5/o1/o3 reasoning models
+  natively — so the fork's manual `reasoning=None` workaround is unnecessary here.
+
+### Fork features intentionally **not** included (and why)
+
+These exist in the fork to support **public, multi-tenant hosting**. They are out of
+scope for a local single-user stdio server — including them would add the exact
+queue/ops/auth surface this rewrite set out to remove:
+
+| Fork feature | Why it's omitted here |
+|---|---|
+| Redis-backed persistent queue (BRPOPLPUSH) | We don't queue at all — writes are awaited, which is what makes failures visible. |
+| Token / nonce authentication middleware | A local stdio server has no network surface to authenticate. |
+| Streamable HTTP / SSE transport | stdio only for v1 (an env-driven transport switch could be added later). |
+| `X-Group-Id` multi-tenant context + allowlist | Single-user; `group_id` is a plain namespace, not a security boundary. |
+| DNS-rebinding protection (`ALLOWED_HOSTS`) | Only relevant when bound to a network interface. |
+| Password-gated `clear_graph` | `clear_graph` is group-scoped and explicit; a shared password adds little locally. |
+
+Borrowed from the fork where it made sense regardless of scope: **`list_group_ids`**,
+**telemetry disabled by default**, and a **tracked `uv.lock`** for reproducible installs.
 
 ## Architecture
 

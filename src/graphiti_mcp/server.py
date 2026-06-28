@@ -17,7 +17,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import load_settings
 from .engine import EngineNotInitializedError, GraphitiEngine
-from .tools import admin, episodes, graph, search
+from .tools import admin, episodes, graph, groups, search
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +174,13 @@ async def delete_episode(episode_uuid: str) -> dict:
 
 
 # ── Admin ──────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def list_group_ids() -> dict:
+    """List the distinct group_ids (memory namespaces) present in the graph."""
+    result = await groups.list_group_ids(get_engine())
+    return result.model_dump()
 
 
 @mcp.tool()
